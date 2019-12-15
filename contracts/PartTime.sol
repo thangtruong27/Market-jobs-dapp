@@ -6,40 +6,25 @@ contract PartTime {
     //Job structure
     struct Job {
         uint256 id;
-        address creator;
-        uint256 salary;
-        uint256 start;
-        uint256 end;
+        address creator;        
+        uint256 salary;        
         uint256 timeOut;
-        bytes title;
-        bytes description;
+        string title;
+        string description;
         address labor;
-        bool completed;
+        bool done;
     }
-
-    //We don't let any trapped in this contract
-    function () public payable {
-        revert();
-    }
-
-    //Empty constructor
-    constructor () public {}
 
     //New job append
-    event NewJob(uint256 indexed id, address creator, uint256 salary, uint256 timeOut);
+    event NewJob(uint256 indexed id,
+    address creator,
+    uint256 salary,
+    uint256 timeOut);
 
     //An woker start working
-    event TakeAJob( uint256 indexed id, address indexed labor);
-    
-    //Cancel created job
-    event CancelCreatedJob(uint256 indexed id, address creator);
-
-    //Job done event
-    event Done(uint256 jobId, address indexed labor);
-
-    //Job failed event
-    event Failed(uint256 jobId, address indexed labor);
-
+    event TakeJob(
+    uint256 indexed id,
+    address indexed labor);
     //Paid
     event Paid(address indexed creator, address indexed labor, uint256 value);
 
@@ -69,40 +54,18 @@ contract PartTime {
         require(jobId < totalJob);
         _;
     }
-
-    //Mortgage should be greater than 1/10
-    modifier onlyValidMortgage(uint256 jobId) {
-        require(msg.value >= jobData[jobId].salary/10);
-        _;
-    }
-
     //Only job creator is accepted
     modifier onlyCreator(uint256 jobId) {
         require(jobData[jobId].creator == msg.sender);
         _;
     }
-
-    //Only job labor is accepted
-    modifier onlyLabor(uint256 jobId) {
-        require(jobData[jobId].labor == msg.sender);
-        _;
-    }
-
-    //Check is it a taked job
-    modifier onlyAvailableJob(uint256 jobId) {
-        require(jobData[jobId].end == 0);
-        require(jobData[jobId].start == 0);
-        _;
-    }
-
     //Only not completed
     modifier onlyNotCompleted(uint256 jobId){
-        require(jobData[jobId].completed == false);
+        require(jobData[jobId].done == false);
         _;
     }
-
     //Append new job to mapping
-    function create(uint256 timeOut, bytes title, bytes description)
+    function createJob (uint256 timeOut, string title, string description)
     public onlyHaveFund onlyValidTimeOut(timeOut) payable returns(uint256 jobId)
     {
         // Saving a little gas by create a temporary object
@@ -117,72 +80,52 @@ contract PartTime {
         newJob.description = description; 
         newJob.salary = msg.value;
         newJob.creator = msg.sender;
-
-        // Append newJob to jobData
-        jobData[totalJob] = newJob;
-        totalJob++;
+        newJob.done = false;
         //Trigger event
         emit NewJob(jobId, msg.sender, msg.value, timeOut);
+
+        // Append newJob to jobData
+        jobData[totalJob++] = newJob;
 
         return jobId;
     }
 
-    //Creator able to cancel his own jobs
-    function cancel(uint256 jobId)
-    public onlyCreator(jobId) onlyAvailableJob(jobId) onlyValidId(jobId) returns(bool)
-    {
-        //Job will become unavailable due to end isn't equal to 0
-        jobData[jobId].end = block.timestamp;
-
-        //Smart contract have to return mortgage
-        jobData[jobId].creator.transfer(jobData[jobId].salary);
-
-        emit CancelCreatedJob(jobId, msg.sender);
-
-        return true;
-    }
-
     //Take job
-    function take(uint256 jobId)
-    public payable onlyValidMortgage(jobId) onlyValidId(jobId) onlyAvailableJob(jobId) returns(bool)
+    function takeJob (uint256 jobId)
+    public onlyValidId(jobId) payable returns(bool)
     {
-
-        //Change working state
-        jobData[jobId].start = block.timestamp;
-        jobData[jobId].labor = msg.sender;
-        
         //Trigger event to log labor
-        emit TakeAJob(jobId, msg.sender);
+        emit TakeJob(jobId, msg.sender);
 
+        //Change working state        
+        jobData[jobId].labor = msg.sender;
         return true;
     }
 
-    //Labor had finished their job
-    function finished(uint256 jobId)
-    public onlyValidId(jobId) onlyLabor(jobId) returns(bool) {
-        jobData[jobId].end = block.timestamp;
-        emit Done(jobId, msg.sender);
-        return true;
+    //View job data
+    function viewJob(uint256 jobId)
+    public onlyValidId(jobId) view returns (
+    uint256 id,
+    address creator,
+    uint256 salary,
+    uint256 timeOut,
+    string title,
+    string description,
+    address labor,
+    bool done)
+    {
+        Job memory jobReader = jobData[jobId];
+        return (
+        jobReader.id,
+        jobReader.creator,
+        jobReader.salary,        
+        jobReader.timeOut,        
+        jobReader.title,
+        jobReader.description,
+        jobReader.labor,
+        jobReader.done);
     }
-
-    //Labor had failed their job
-    function failed(uint256 jobId)
-    public onlyValidId(jobId) onlyLabor(jobId) returns(bool) {
-        //Reset job
-        Job memory mJob = jobData[jobId];
-        uint256 value = (mJob.salary/10)/2;
-        mJob.start = 0;
-        mJob.labor = 0;
-        //Update data set
-        jobData[jobId] = mJob;
-        //Labor lost 1/2 their mortgage
-        msg.sender.transfer(value);
-        //Creator receive 1/2 labor's mortgage
-        mJob.creator.transfer(value);
-        emit Failed(jobId, msg.sender);
-        return true;
-    }
-
+    
     //Creator pay money
     function pay(uint256 jobId)
     public onlyValidId(jobId) onlyCreator(jobId) onlyNotCompleted(jobId) returns(bool) {
@@ -193,7 +136,7 @@ contract PartTime {
         value = value + (value/10);
 
         //Mark job as completed
-        jobData[jobId].completed = true;
+        jobData[jobId].done = true;
 
         //Transfer fund and mortgage to labor
         jobData[jobId].labor.transfer(value);
@@ -202,5 +145,4 @@ contract PartTime {
 
         return true;
     }
- 
 }
