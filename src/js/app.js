@@ -74,9 +74,10 @@ App = {
               jobTemplate.find('.job-id').text(data[0]);
               jobTemplate.find('.job-creator').text(data[1]);
               jobTemplate.find('.job-labor').text('null');
-              jobTemplate.find('.job-salary').text(data[2]);
+              jobTemplate.find('.job-salary').text(`${data[2] / 1000000000000000000} ETH`);
               jobTemplate.find('.job-description').text(data[5]);
               jobTemplate.find('#btn-apply').attr('data-id', data[0]);
+              jobTemplate.find('#btn-apply').attr('data-salary', data[2]);
               jobTemplate.find('#btn-done').attr('data-id', data[0]);
               jobTemplate.find('#btn-apply').attr('disabled', false);
               jobTemplate.find('#btn-apply').css('display', 'inline');
@@ -124,6 +125,7 @@ App = {
     //Create a partime job
     const title = $('#title').val();
     const description = $('#description').val();
+    const salary = $('#salary').val();
     web3.eth.getAccounts(function (error, accounts) {
       if (error) {
         console.log(error);
@@ -135,11 +137,13 @@ App = {
           timeStamp,
           title,
           description,
-          App.createTx(account, instancePartTime.address, web3.toWei('1', 'ether'))
+          App.createTx(account, instancePartTime.address, web3.toWei(salary, 'ether'))
         );
       }).then(function (result) {
         console.log(result);
         $('#exampleModal').modal('hide');
+        const event = instancePartTime.NewJob();
+        App.handleEvent(event);
       }).catch(function (err) {
         console.log(err.message);
       });
@@ -149,7 +153,7 @@ App = {
     event.preventDefault();
     var instancePartTime;
     var jobId = parseInt($(event.target).data('id'));
-
+    var deposit = parseInt($(event.target).data('salary')) / 10000000000000000000;
     web3.eth.getAccounts(function (error, accounts) {
       if (error) {
         console.log(error);
@@ -160,11 +164,12 @@ App = {
         instancePartTime = instance;
         return instancePartTime.takeJob(
           jobId,
-          App.createTx(account, instancePartTime.address, web3.toWei('0.1', 'ether'))
+          App.createTx(account, instancePartTime.address, web3.toWei(deposit, 'ether'))
         );
       }).then(function (result) {
         console.log("apply successfully!");
-        console.log(result);
+        const event = instancePartTime.TakeJob();
+        App.handleEvent(event);
       }).catch(function (err) {
         console.log(err.message);
       });
@@ -190,10 +195,22 @@ App = {
         );
       }).then(function (result) {
         console.log("pay successfully!");
-        console.log(result);
+        const event = instancePartTime.Paid();
+        App.handleEvent(event);
       }).catch(function (err) {
         console.log(err.message);
       });
+    });
+  },
+  handleEvent: function (event) {
+    console.log('Waiting for a event...');
+    event.watch(function (error, result) {
+      if (!error) {
+        App.getJobs();
+      } else {
+        console.log(error);
+      }
+      event.stopWatching();
     });
   }
 }
